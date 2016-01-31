@@ -1,17 +1,7 @@
-<!--
-@license
-Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
-This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
-The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
-The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
-Code distributed by Google as part of the polymer project is also
-subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
--->
-
 <link rel="import" href="../polymer/polymer.html">
 
 <!--
-An element providing a solution to no problem in particular.
+An element that parses CSV content.
 
 Example:
 
@@ -20,7 +10,6 @@ Example:
 Example:
 
     <psy-csv-reader>
-      <h2>Hello psy-csv-reader</h2>
     </psy-csv-reader>
 
 @demo demo/index.html
@@ -28,124 +17,192 @@ Example:
 -->
 
 <dom-module id="psy-csv-reader">
-  <template>
-    <style>
-      :host {
-        display: block;
-        box-sizing: border-box;
-      }
-
-      .author img {
-        display: block;
-        float: left;
-        margin-right: 5px;
-        max-height: 100px;
-        max-width: 100px;
-      }
-    </style>
-
-    <h1>&lt;psy-csv-reader&gt;</h1>
-    <content></content>
-    <p class="author">
-      <img src$="{{author.image}}">
-      Cheers,<br/>
-      <span class="name">{{author.name}}</span>
-    </p>
-  </template>
-
   <script>
     Polymer({
       is: 'psy-csv-reader',
 
       properties: {
-        /**
-         * `fancy` indicates that the element should don a monocle and tophat,
-         * while checking its pocket watch.
-         */
-        fancy: Boolean,
 
         /**
-         * Describes the author of the element, but is really just an excuse to
-         * show off JSDoc annotations.
-         *
-         * @type {{name: string, image: string}}
+         * `delimiter` determines the delimiter used by the CSV representation.
          */
-        author: {
-          type: Object,
-          // Use `value` to provide a default value for a property, by setting it
-          // on your element's prototype.
-          //
-          // If you provide a function, as we do here, Polymer will call that
-          // _per element instance_.
-          //
-          // We do that to ensure that each element gets its own copy of the
-          // value, rather than having it shared across all instances (via the
-          // prototype).
-          value: function() {
-            return {
-              name:  'Dimitri Glazkov',
-              image: 'http://addyosmani.com/blog/wp-content/uploads/2013/04/unicorn.jpg',
-            };
-          }
+        delimiter: {
+          type: String,
+          value: ','
         },
+
+        /**
+         * The character to use to escape values that contain a delimiter.
+         * If you set to null then all quoting will be ignored.
+         */
+        quote: {
+          type: String,
+          value: '"'
+        },
+
+        noheader: {
+          type: Boolean,
+          value: false,
+        },
+
+        /**
+         * `text` contains the CSV representation you want to parse.
+         */
+        text: {
+          type: String,
+          value: '',
+          observer: '_textChanged'
+        },
+
+        /**
+         * `data` contains the object representation parsed from the CSV.
+         */
+        data: {
+          type: Object,
+          readOnly: true,
+          notify: true
+        },
+
+        /**
+         * `auto` indicates that the `text` value will be processed as soon
+         * as the value of `text` changed.
+         */
+        auto: {
+          type: Boolean,
+          value: false
+        },
+
       },
 
-      // Element Lifecycle
-
-      ready: function() {
-        // `ready` is called after all elements have been configured, but
-        // propagates bottom-up. This element's children are ready, but parents
-        // are not.
-        //
-        // This is the point where you should make modifications to the DOM (when
-        // necessary), or kick off any processes the element wants to perform.
+      // Property change observers
+      _textChanged: function() {
+        if (this.auto === true) {
+          this.parse();
+        }
       },
 
-      attached: function() {
-        // `attached` fires once the element and its parents have been inserted
-        // into a document.
-        //
-        // This is a good place to perform any work related to your element's
-        // visual state or active behavior (measuring sizes, beginning animations,
-        // loading resources, etc).
+      // Private implementation
+
+      /**
+       * Parses text rows.
+       *
+       * @param {string} the text to be processed.
+       * @return {array} the array of rows.
+       */
+      _parseRows: function(text, delimiter, quote) {
+        var EOL = {}, // sentinel value for end-of-line
+            EOF = {}, // sentinel value for end-of-file
+            rows = [], // output rows
+            N = text.length,
+            I = 0, // current character index
+            n = 0, // current line number
+            t, // the current token
+            eol, // is the current token followed by EOL?
+            delimiterCode = delimiter.charCodeAt(0), // delimiter
+            quoteCode = quote.charCodeAt(0); // quote
+
+        function token() {
+          if (I >= N) return EOF; // special case: end of file
+          if (eol) return eol = false, EOL; // special case: end of line
+
+          // special case: quotes
+          var j = I;
+          if (text.charCodeAt(j) === quoteCode) {
+            var i = j;
+            while (i++ < N) {
+              if (text.charCodeAt(i) === quoteCode) {
+                if (text.charCodeAt(i + 1) !== quoteCode) break;
+                ++i;
+              }
+            }
+            I = i + 2;
+            var c = text.charCodeAt(i + 1);
+            if (c === 13) {
+              eol = true;
+              if (text.charCodeAt(i + 2) === 10) ++I;
+            } else if (c === 10) {
+              eol = true;
+            }
+            return text.slice(j + 1, i).replace(/""/g, "\"");
+          }
+
+          // common case: find next delimiter or newline
+          while (I < N) {
+            var c = text.charCodeAt(I++), k = 1;
+            if (c === 10) eol = true; // \n
+            else if (c === 13) { eol = true; if (text.charCodeAt(I) === 10) ++I, ++k; } // \r|\r\n
+            else if (c !== delimiterCode) continue;
+            return text.slice(j, I - k);
+          }
+
+          // special case: last token before EOF
+          return text.slice(j);
+        }
+
+        while ((t = token()) !== EOF) {
+          var a = [];
+          while (t !== EOL && t !== EOF) {
+            a.push(t);
+            t = token();
+          }
+          rows.push(a);
+        }
+
+        return rows;
       },
 
-      detached: function() {
-        // The analog to `attached`, `detached` fires when the element has been
-        // removed from a document.
-        //
-        // Use this to clean up anything you did in `attached`.
+      /**
+       * Interprets the header to create an object instead of an array.
+       *
+       * @param {array} the rows to be processed.
+       * @return {array} the array of object.
+       */
+      _transformHeader: function(rows) {
+        var r = [];
+
+        if (rows.length && rows[0] && rows[0].length) {
+          var headerCount = rows[0].length,
+              headers = [],
+              i, j;
+
+          // constructs header
+          for (j = 0; j < headerCount; j++) {
+            headers.push(rows[0][j]);
+          }
+
+          // transform rows
+          for (i = 1; i < rows.length; i++) {
+            var obj = {};
+
+            for (j = 0; j < headerCount; j++) {
+              obj[headers[j]] = rows[i][j];
+            }
+
+            r.push(obj);
+          }
+        }
+
+        return r;
       },
 
       // Element Behavior
 
       /**
-       * Sometimes it's just nice to say hi.
-       *
-       * @param {string} greeting A positive greeting.
-       * @return {string} The full greeting.
+       * Parses the content of the `text` value.
        */
-      sayHello: function(greeting) {
-        var response = greeting || 'Hello World!';
-        return 'psy-csv-reader says, ' + response;
+      parse: function() {
+        var t = this.text || '';
+
+        var r =  this._parseRows(t, this.delimiter, this.quote);
+
+        if (!this.noheader) {
+          r = this._transformHeader(r);
+        }
+
+        this._setData(r);
+        return this.data;
       },
 
-      /**
-       * The `psy-csv-reader-lasers` event is fired whenever `fireLasers` is called.
-       *
-       * @event psy-csv-reader-lasers
-       * @detail {{sound: String}}
-       */
-
-      /**
-       * Attempt to destroy this element's enemies with a beam of light!
-       *
-       * Or, at least, dispatch an event in the vain hope that someone else will
-       * do the zapping.
-       */
-      fireLasers: function() {
-        this.fire('psy-csv-reader-lasers', {sound: 'Pew pew!'});
-      }
     });
   </script>
 </dom-module>

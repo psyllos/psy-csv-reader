@@ -2,7 +2,7 @@
   "name": "psy-csv-reader",
   "version": "1.0.7",
   "authors": [
-    "Anonymous <anonymous@example.com>"
+    "psyllos <psyllos@gmail.com>"
   ],
   "description": "An element providing a solution to no problem in particular.",
   "keywords": [
@@ -12,7 +12,7 @@
   ],
   "main": "psy-csv-reader.html",
   "license": "http://polymer.github.io/LICENSE.txt",
-  "homepage": "https://github.com/<USERNAME>/seed-element/",
+  "homepage": "https://github.com/psyllos/psy-csv-reader/",
   "ignore": [
     "/.*",
     "/test/"
