@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/psyllos/psy-csv-reader.svg?branch=master)](https://travis-ci.org/psyllos/psy-csv-reader)
+
 # psy-csv-reader
 
 An element providing a starting point for your own reusable Polymer elements.
